@@ -7,20 +7,17 @@
   "entry": "main.lua",
   "version": "1.0.0",
   "taptap_publish": {
-    "title": "失业开厂",
-    "description": "",
+    "title": "大学生失业1万块开3D打印工作室",
     "category": "casual",
     "screen_orientation": "landscape",
     "collection_type": "sce",
-    "trial_note": "",
     "app_platforms": "1,2",
     "app_id": 1077667,
     "developer_id": 259984,
     "miniapp_id": "tapmcgli5eb5iewlqj"
   },
-  "assets": {
-    "icon": "",
-    "screenshots": [],
-    "promotional_image": ""
+  "assets": {},
+  "metadata": {
+    "updated_at": "2026-11-19T08:34:40.635Z"
   }
 }
