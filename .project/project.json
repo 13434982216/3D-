@@ -8,7 +8,7 @@
   "version": "1.0.0",
   "taptap_publish": {
     "title": "大学生失业1万块开3D打印工作室",
-    "category": "casual",
+    "category": "simulation",
     "screen_orientation": "landscape",
     "collection_type": "sce",
     "app_platforms": "1,2",
@@ -18,6 +18,25 @@
   },
   "assets": {},
   "metadata": {
-    "updated_at": "2026-11-19T08:34:40.635Z"
+    "updated_at": "2026-11-19T16:08:48.220Z"
+  },
+  "dc_publish_sync": {
+    "synced": true,
+    "dcVersion": "V-20261119",
+    "dcStatus": "INIT",
+    "baseFields": {
+      "title": "大学生失业1万块开3D打印工作室",
+      "description": null,
+      "category": "simulation",
+      "trial_note": null,
+      "icon_url": null,
+      "banner_url": null,
+      "square_promo_url": null,
+      "cover_horizontal_url": null,
+      "cover_vertical_url": null,
+      "screenshot_urls": null
+    },
+    "pending": {},
+    "baseGameplayDemoVideoId": 0
   }
 }
