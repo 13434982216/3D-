@@ -100,8 +100,7 @@ function M.FetchTop(topN, callback)
     })
 end
 
---- 查询我自己的名次（rank 为 nil 表示未上榜）
----@param callback fun(rank: integer|nil, coins: integer|nil)
+--- 查询我自己的名次（rank 为 nil 表示未上榜）---@param callback fun(rank: integer|nil, coins: integer|nil)
 function M.FetchMyRank(callback)
     if not HasCloud() then
         callback(nil, nil)
@@ -116,6 +115,26 @@ function M.FetchMyRank(callback)
         end,
         timeout = function()
             callback(nil, nil)
+        end,
+    })
+end
+
+--- 查询上榜总人数（失败回调 nil）
+---@param callback fun(total: integer|nil)
+function M.FetchTotal(callback)
+    if not HasCloud() then
+        callback(nil)
+        return
+    end
+    clientCloud:GetRankTotal(RANK_KEY, {
+        ok = function(total)
+            callback(total)
+        end,
+        error = function()
+            callback(nil)
+        end,
+        timeout = function()
+            callback(nil)
         end,
     })
 end

@@ -26,6 +26,9 @@ local richList_
 local richError_
 ---@type integer|nil
 local richSelfRank_
+--- 上榜总人数（nil = 未知）
+---@type integer|nil
+local richTotal_
 --- 金币云同步节流
 local cloudSyncTimer_ = 0.0
 ---@type integer 上次发起同步时的金币值
@@ -3393,7 +3396,14 @@ local function RefreshRich()
     richList_ = nil
     richError_ = nil
     richSelfRank_ = nil
+    richTotal_ = nil
     Leaderboard.PushCoins(M.coins)
+    Leaderboard.FetchTotal(function(total)
+        richTotal_ = total
+        if currentPage_ == "rich" then
+            pendingPage_ = "rich"
+        end
+    end)
     Leaderboard.FetchMyRank(function(rank)
         richSelfRank_ = rank
         if currentPage_ == "rich" then
@@ -3476,11 +3486,15 @@ local function BuildRichFrame()
         },
     }
 
+    local totalText = ""
+    if richTotal_ ~= nil then
+        totalText = string.format(" · 共 %d 人上榜", richTotal_)
+    end
     local selfText = "我的名次：加载中…"
     if richSelfRank_ ~= nil then
-        selfText = string.format("我的名次：第 %d 名 · 身家 %s", richSelfRank_, FormatCoins(math.floor(M.coins)))
+        selfText = string.format("我的名次：第 %d 名 · 身家 %s%s", richSelfRank_, FormatCoins(math.floor(M.coins)), totalText)
     elseif richList_ == false then
-        selfText = string.format("我的身家 %s", FormatCoins(math.floor(M.coins)))
+        selfText = string.format("我的身家 %s%s", FormatCoins(math.floor(M.coins)), totalText)
     end
     local summary = UI.Panel {
         height = 42,
