@@ -3486,15 +3486,11 @@ local function BuildRichFrame()
         },
     }
 
-    local totalText = ""
-    if richTotal_ ~= nil then
-        totalText = string.format(" · 共 %d 人上榜", richTotal_)
-    end
     local selfText = "我的名次：加载中…"
     if richSelfRank_ ~= nil then
-        selfText = string.format("我的名次：第 %d 名 · 身家 %s%s", richSelfRank_, FormatCoins(math.floor(M.coins)), totalText)
+        selfText = string.format("我的名次：第 %d 名 · 身家 %s", richSelfRank_, FormatCoins(math.floor(M.coins)))
     elseif richList_ == false then
-        selfText = string.format("我的身家 %s%s", FormatCoins(math.floor(M.coins)), totalText)
+        selfText = string.format("我的身家 %s", FormatCoins(math.floor(M.coins)))
     end
     local summary = UI.Panel {
         height = 42,
@@ -3582,6 +3578,23 @@ local function BuildRichFrame()
         },
     }
 
+    --- 已上榜人数统计条
+    local totalChip = UI.Panel {
+        height = 40,
+        flexDirection = "row",
+        alignItems = "center",
+        justifyContent = "center",
+        gap = 8,
+        borderRadius = 8,
+        backgroundGradient = CREAM_GRAD,
+        borderWidth = 2,
+        borderColor = C.cardBorder,
+        children = {
+            Icon("Images/ui/icons/diamond.png", 18),
+            Txt(richTotal_ ~= nil and string.format("已有 %d 人上榜", richTotal_) or "上榜人数统计中…", 13, C.ink, "bold"),
+        },
+    }
+
     return UI.Panel {
         flexGrow = 1,
         flexBasis = 0,
@@ -3607,6 +3620,7 @@ local function BuildRichFrame()
                     summary,
                 },
             },
+            totalChip,
             scroll,
         },
     }
