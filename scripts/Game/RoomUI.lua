@@ -3,6 +3,7 @@ local UI = require("urhox-libs/UI")
 local M = require("Game.Machines")
 local Orders = require("Game.Orders")
 local Sfx = require("Game.Sfx")
+local Leaderboard = require("Game.Leaderboard")
 
 local compact_ = false
 local currentPage_ = "room"
@@ -17,6 +18,18 @@ local opMachineCode_
 local venueOpen_ = false
 local refreshTimer_ = 0.0
 local fxTime_ = 0.0
+
+-- 富豪榜：nil = 加载中，false = 加载失败（reason 在 richError_）
+---@type RichEntry[]|nil|false
+local richList_
+---@type string|nil
+local richError_
+---@type integer|nil
+local richSelfRank_
+--- 金币云同步节流
+local cloudSyncTimer_ = 0.0
+---@type integer 上次发起同步时的金币值
+local cloudSyncSent_ = -1
 
 ---@type table<string, string>
 local lastStatus_ = {}
@@ -65,6 +78,13 @@ local roomRefs_ = {}
 
 ---@type OrderCardRefs[]
 local orderRefs_ = {}
+
+---@class RichEntry
+---@field rank integer
+---@field userId any
+---@field nickname string
+---@field coins integer
+---@field isMe boolean
 
 local C = {
     ink = { 58, 41, 24, 255 },
@@ -899,6 +919,11 @@ local function BuildTopBar()
         NavButton("Images/ui/icons/book.png", "图鉴", currentPage_ == "gallery", function()
             if currentPage_ ~= "gallery" then
                 pendingPage_ = "gallery"
+            end
+        end),
+        NavButton("Images/ui/icons/diamond.png", "富豪榜", currentPage_ == "rich", function()
+            if currentPage_ ~= "rich" then
+                pendingPage_ = "rich"
             end
         end),
         NavButton("Images/ui/icons/rebirth.png", "转生", false, function()
@@ -3363,6 +3388,216 @@ local function BuildOperationOverlay(machine)
     }
 end
 
+--- 先上传当前金币再拉取榜单（保证自己的名次是最新的）
+local function RefreshRich()
+    richList_ = nil
+    richError_ = nil
+    richSelfRank_ = nil
+    Leaderboard.PushCoins(M.coins)
+    Leaderboard.FetchMyRank(function(rank)
+        richSelfRank_ = rank
+        if currentPage_ == "rich" then
+            pendingPage_ = "rich"
+        end
+    end)
+    Leaderboard.FetchTop(20, function(entries, reason)
+        if entries == nil then
+            richList_ = false
+            richError_ = reason or "加载失败"
+        else
+            richList_ = entries
+        end
+        if currentPage_ == "rich" then
+            pendingPage_ = "rich"
+        end
+    end)
+end
+
+--- 前三名奖牌配色
+local RANK_COLORS = {
+    { 250, 173, 20, 255 },  -- 金
+    { 168, 170, 175, 255 }, -- 银
+    { 205, 127, 50, 255 },  -- 铜
+}
+
+---@param entry RichEntry
+---@return Panel
+local function BuildRichRow(entry)
+    local medalColor = RANK_COLORS[entry.rank]
+    local rowChildren = {
+        UI.Panel {
+            width = 34,
+            height = 34,
+            borderRadius = 17,
+            justifyContent = "center",
+            alignItems = "center",
+            backgroundColor = medalColor or C.track,
+            borderWidth = 2,
+            borderColor = entry.isMe and C.orangeDeep or C.ink,
+            children = { Txt(tostring(entry.rank), 15, entry.rank <= 3 and { 255, 255, 255, 255 } or C.ink, "bold") },
+        },
+        Txt(entry.nickname, 14, entry.isMe and C.orangeDeep or C.ink, entry.isMe and "bold" or "normal"),
+        UI.Spacer(),
+        Icon("Images/ui/icons/coin.png", 16),
+        Txt(FormatCoins(entry.coins), 14, entry.isMe and C.orangeDeep or C.inkSoft, "bold"),
+    }
+    return UI.Panel {
+        height = 46,
+        minHeight = 46,
+        flexDirection = "row",
+        alignItems = "center",
+        gap = 10,
+        paddingHorizontal = 10,
+        borderRadius = 8,
+        backgroundGradient = entry.isMe and ORANGE_GRAD or CREAM_GRAD,
+        borderWidth = 2,
+        borderColor = entry.isMe and C.orangeDeep or C.cardBorder,
+        pointerEvents = "box-only",
+        children = rowChildren,
+    }
+end
+
+---@return Panel
+local function BuildRichFrame()
+    local titlePlate = UI.Panel {
+        height = 48,
+        flexDirection = "row",
+        alignItems = "center",
+        gap = 8,
+        paddingHorizontal = 12,
+        borderRadius = 8,
+        backgroundGradient = ORANGE_GRAD,
+        borderWidth = 3,
+        borderColor = C.cardBorder,
+        boxShadow = { { x = 0, y = 3, blur = 4, spread = 0, color = { 0, 0, 0, 80 } } },
+        children = {
+            Icon("Images/ui/icons/diamond.png", 30),
+            Txt("富豪榜", 22, { 62, 40, 18, 255 }, "bold"),
+        },
+    }
+
+    local selfText = "我的名次：加载中…"
+    if richSelfRank_ ~= nil then
+        selfText = string.format("我的名次：第 %d 名 · 身家 %s", richSelfRank_, FormatCoins(math.floor(M.coins)))
+    elseif richList_ == false then
+        selfText = string.format("我的身家 %s", FormatCoins(math.floor(M.coins)))
+    end
+    local summary = UI.Panel {
+        height = 42,
+        flexDirection = "row",
+        alignItems = "center",
+        gap = 8,
+        paddingHorizontal = 12,
+        borderRadius = 8,
+        backgroundGradient = CREAM_GRAD,
+        borderWidth = 2,
+        borderColor = C.cardBorder,
+        children = {
+            Txt(selfText, 12, C.ink, "bold"),
+            UI.Spacer(),
+            UI.Panel {
+                height = 30,
+                paddingHorizontal = 10,
+                flexDirection = "row",
+                alignItems = "center",
+                gap = 4,
+                borderRadius = 6,
+                backgroundGradient = ORANGE_GRAD,
+                borderWidth = 2,
+                borderColor = C.ink,
+                onClick = function()
+                    print("[3D打印] 刷新富豪榜")
+                    RefreshRich()
+                end,
+                children = {
+                    Icon("Images/ui/icons/upgrade.png", 14),
+                    Txt("刷新", 12, { 62, 40, 18, 255 }, "bold"),
+                },
+            },
+        },
+    }
+
+    local rows
+    if richList_ == nil then
+        rows = {
+            UI.Panel {
+                height = 60,
+                justifyContent = "center",
+                alignItems = "center",
+                children = { Txt("云端榜单加载中…", 14, C.inkSoft) },
+            },
+        }
+    elseif richList_ == false then
+        rows = {
+            UI.Panel {
+                height = 60,
+                justifyContent = "center",
+                alignItems = "center",
+                children = { Txt("榜单加载失败：" .. richError_, 14, C.red, "bold") },
+            },
+        }
+    elseif #richList_ == 0 then
+        rows = {
+            UI.Panel {
+                height = 60,
+                justifyContent = "center",
+                alignItems = "center",
+                children = { Txt("还没有人上榜，快去赚金币吧！", 14, C.inkSoft) },
+            },
+        }
+    else
+        rows = {}
+        for _, entry in ipairs(richList_) do
+            rows[#rows + 1] = BuildRichRow(entry)
+        end
+    end
+
+    local scroll = UI.ScrollView {
+        id = "richScroll",
+        flexGrow = 1,
+        flexBasis = 0,
+        scrollY = true,
+        showScrollbar = true,
+        bounces = true,
+        children = {
+            UI.Panel {
+                flexDirection = "column",
+                gap = 6,
+                children = rows,
+            },
+        },
+    }
+
+    return UI.Panel {
+        flexGrow = 1,
+        flexBasis = 0,
+        marginHorizontal = 10,
+        marginVertical = 8,
+        padding = 8,
+        flexDirection = "column",
+        gap = 8,
+        borderRadius = 8,
+        backgroundColor = { 96, 118, 142, 255 },
+        backgroundImage = "Images/ui/metal_bg.png",
+        backgroundImageOpacity = 0.32,
+        borderWidth = 3,
+        borderColor = C.cardBorder,
+        children = {
+            UI.Panel {
+                flexDirection = "row",
+                alignItems = "center",
+                gap = 10,
+                children = {
+                    titlePlate,
+                    UI.Spacer(),
+                    summary,
+                },
+            },
+            scroll,
+        },
+    }
+end
+
 ---@return Panel
 local function BuildRoot()
     local page
@@ -3372,6 +3607,8 @@ local function BuildRoot()
         page = BuildOrdersFrame()
     elseif currentPage_ == "gallery" then
         page = BuildGalleryFrame()
+    elseif currentPage_ == "rich" then
+        page = BuildRichFrame()
     else
         page = BuildMainFrame()
     end
@@ -3379,7 +3616,7 @@ local function BuildRoot()
     local children = { BuildTopBar(), page }
     if currentPage_ == "orders" then
         children[#children + 1] = BuildOrdersBottomBar()
-    elseif currentPage_ ~= "shop" and currentPage_ ~= "gallery" then
+    elseif currentPage_ ~= "shop" and currentPage_ ~= "gallery" and currentPage_ ~= "rich" then
         children[#children + 1] = BuildBottomBar()
     end
 
@@ -3433,6 +3670,10 @@ ShowPage = function(page)
     if page ~= "room" then
         opMachineCode_ = nil
         venueOpen_ = false
+    end
+    -- 进入富豪榜页时先上传最新金币，再拉取榜单与我的名次
+    if page == "rich" then
+        RefreshRich()
     end
     -- 重建会销毁旧控件，先清空标签引用，避免操作已释放的对象
     coinChipLabel_ = nil
@@ -3519,6 +3760,18 @@ function RoomUI.Update(dt)
         RefreshRoom()
         RefreshOrders()
         RefreshTopBar()
+    end
+
+    -- 金币变化后每 15 秒向云端富豪榜同步一次
+    local coinsNow = math.floor(M.coins)
+    if coinsNow ~= cloudSyncSent_ then
+        cloudSyncTimer_ = cloudSyncTimer_ + dt
+        if cloudSyncTimer_ >= 15.0 then
+            cloudSyncTimer_ = 0.0
+            if Leaderboard.PushCoins(M.coins) then
+                cloudSyncSent_ = coinsNow
+            end
+        end
     end
 
     if pendingPage_ ~= nil then
