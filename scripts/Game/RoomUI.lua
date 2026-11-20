@@ -4,6 +4,7 @@ local M = require("Game.Machines")
 local Orders = require("Game.Orders")
 local Sfx = require("Game.Sfx")
 local Leaderboard = require("Game.Leaderboard")
+local OfficialRank = require("Game.OfficialRank")
 
 local compact_ = false
 local currentPage_ = "room"
@@ -3398,6 +3399,8 @@ local function RefreshRich()
     richSelfRank_ = nil
     richTotal_ = nil
     Leaderboard.PushCoins(M.coins)
+    -- 官方排行榜（游戏排行）独立提交，与 clientCloud 云变量榜互不影响
+    OfficialRank.Submit(M.coins, nil)
     Leaderboard.FetchTotal(function(total)
         richTotal_ = total
         if currentPage_ == "rich" then
@@ -3505,6 +3508,32 @@ local function BuildRichFrame()
         children = {
             Txt(selfText, 12, C.ink, "bold"),
             UI.Spacer(),
+            UI.Panel {
+                height = 30,
+                paddingHorizontal = 10,
+                flexDirection = "row",
+                alignItems = "center",
+                gap = 4,
+                borderRadius = 6,
+                backgroundGradient = CREAM_GRAD,
+                borderWidth = 2,
+                borderColor = C.ink,
+                onClick = function()
+                    print("[3D打印] 打开官方排行榜")
+                    OfficialRank.Submit(M.coins, function(success, message)
+                        OfficialRank.Open("public", function(opened, openMsg)
+                            if not opened then
+                                UI.Toast.Show("官方排行榜打开失败：" .. tostring(openMsg),
+                                    { type = "warning", duration = 2.4 })
+                            end
+                        end)
+                    end)
+                end,
+                children = {
+                    Icon("Images/ui/icons/diamond.png", 14),
+                    Txt("官方榜", 12, C.ink, "bold"),
+                },
+            },
             UI.Panel {
                 height = 30,
                 paddingHorizontal = 10,
