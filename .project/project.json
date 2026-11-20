@@ -18,7 +18,7 @@
   },
   "assets": {},
   "metadata": {
-    "updated_at": "2026-11-19T16:08:48.220Z"
+    "updated_at": "2026-11-20T05:55:09.263Z"
   },
   "dc_publish_sync": {
     "synced": true,
@@ -38,5 +38,17 @@
     },
     "pending": {},
     "baseGameplayDemoVideoId": 0
+  },
+  "test_qrcode": {
+    "url": "https://img-tc.tapimg.com/market/images/FqeBXb9eWIsyKC7dqUepg3heWTlj.png",
+    "generated_at": "2026-11-20T05:55:09.263Z",
+    "pending_upload": null,
+    "preview_url": "https://www.taptap.cn/qrcode/miniapp?id=tapmcgli5eb5iewlqj&type=develop&version_id=524146",
+    "mode": "develop",
+    "game_version": "1.0.0",
+    "map_version": "1",
+    "version_id": "524146",
+    "miniapp_id": "tapmcgli5eb5iewlqj",
+    "operation_id": "01a1f785-6651-7e1c-94cb-2634007cd0b8"
   }
 }
