@@ -46,6 +46,10 @@ function Orders.Init()
     M.day = 1
     M.dayTimer = 0.0
     M.rentDue = 0
+    M.todayRevenue = 0.0
+    M.todayDelivered = 0
+    M.goodsDone = 0
+    M.damagedDone = 0
     for _, machine in ipairs(M.machines) do
         local n = tonumber(string.match(machine.code, "%d+") or "")
         if n ~= nil and n >= nextCode_ then
@@ -278,8 +282,10 @@ local function UpdatePrinting(machine, order, dt, completed)
     machine.batchIndex = machine.batchIndex + 1
     if math.random() < M.damageChance then
         order.damagedCount = order.damagedCount + 1
+        M.damagedDone = M.damagedDone + 1
     else
         order.goodCount = order.goodCount + 1
+        M.goodsDone = M.goodsDone + 1
     end
 
     if machine.batchIndex >= batchSize then
@@ -359,6 +365,8 @@ function UpdateDay(dt)
     end
     M.dayTimer = M.dayTimer - M.daySeconds
     M.day = M.day + 1
+    M.todayRevenue = 0.0
+    M.todayDelivered = 0
 
     local rent = Orders.CurrentVenue().rent
     if M.coins >= rent then
@@ -429,6 +437,9 @@ function Orders.Collect(machine)
         local reward = order.price
         M.coins = M.coins + reward
         M.profit = M.profit + reward
+        M.todayRevenue = M.todayRevenue + reward
+        M.todayDelivered = M.todayDelivered + order.quantity
+        M.exp = M.exp + math.max(1, math.floor(reward / 10))
         M.delivered[order.product] = (M.delivered[order.product] or 0) + order.quantity
         order.status = "已完成"
         order.machineCode = nil

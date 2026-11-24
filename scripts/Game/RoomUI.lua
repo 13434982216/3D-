@@ -7,7 +7,7 @@ local Leaderboard = require("Game.Leaderboard")
 local OfficialRank = require("Game.OfficialRank")
 
 local compact_ = false
-local currentPage_ = "room"
+local currentPage_ = "home"
 local pendingPage_ = nil
 local shopTab_ = "printers"
 local orderFilter_ = "all"
@@ -30,6 +30,9 @@ local richSelfRank_
 --- 上榜总人数（nil = 未知）
 ---@type integer|nil
 local richTotal_
+--- 首页排行榜前三：nil = 加载中，false = 加载失败
+---@type RankEntry[]|nil|false
+local homeRank_
 --- 金币云同步节流
 local cloudSyncTimer_ = 0.0
 ---@type integer 上次发起同步时的金币值
@@ -52,6 +55,22 @@ local machineCostLabel_
 local venueInfoLabel_
 ---@type Label|nil
 local venueRentLabel_
+
+--- 首页顶部与经营总览的动态标签
+---@type Label|nil
+local homeCoinLabel_
+---@type Label|nil
+local homeExpLabel_
+---@type Label|nil
+local homeProfitLabel_
+---@type Label|nil
+local homeRevenueLabel_
+---@type Label|nil
+local homePendingLabel_
+---@type Label|nil
+local homeSatisfactionLabel_
+---@type Label|nil
+local homeDeliveredLabel_
 
 ---@type fun(page: string)
 local ShowPage
@@ -198,6 +217,28 @@ local function FormatProfit(n)
         return string.format("-%.1f万", -n / 10000)
     end
     return tostring(rounded)
+end
+
+--- 首页「待完成订单」：尚未交付的订单数
+---@return integer
+local function HomePendingCount()
+    local n = 0
+    for _, order in ipairs(M.orders) do
+        if order.status ~= "已完成" then
+            n = n + 1
+        end
+    end
+    return n
+end
+
+--- 首页「客户满意度」：成品件数 / 总件数，没打过件时视为 100%
+---@return integer
+local function HomeSatisfaction()
+    local total = M.goodsDone + M.damagedDone
+    if total <= 0 then
+        return 100
+    end
+    return math.floor(M.goodsDone * 100 / total + 0.5)
 end
 
 ---@param grams number
@@ -650,6 +691,30 @@ local function RefreshTopBar()
             venueRentLabel_:SetFontColor(C.inkSoft)
         end
     end
+    if homeCoinLabel_ ~= nil then
+        homeCoinLabel_:SetText(FormatCoins(coinShown_))
+    end
+    if homeExpLabel_ ~= nil then
+        homeExpLabel_:SetText(FormatNumber(M.exp))
+    end
+    if homeProfitLabel_ ~= nil then
+        homeProfitLabel_:SetText(FormatProfit(M.profit))
+        homeProfitLabel_:SetFontColor(M.profit >= 0 and C.green or C.red)
+    end
+    if homeRevenueLabel_ ~= nil then
+        homeRevenueLabel_:SetText(FormatCoins(math.floor(M.todayRevenue)))
+    end
+    if homePendingLabel_ ~= nil then
+        homePendingLabel_:SetText(tostring(HomePendingCount()))
+    end
+    if homeSatisfactionLabel_ ~= nil then
+        local pct = HomeSatisfaction()
+        homeSatisfactionLabel_:SetText(string.format("%d%%", pct))
+        homeSatisfactionLabel_:SetFontColor(pct >= 90 and C.green or (pct >= 70 and C.amber or C.red))
+    end
+    if homeDeliveredLabel_ ~= nil then
+        homeDeliveredLabel_:SetText(string.format("%d 件", M.todayDelivered))
+    end
 end
 
 --- 缺料/故障卡片：边缘闪烁 + 警示三角晃动
@@ -905,6 +970,11 @@ end
 ---@return Panel
 local function BuildTopBar()
     local nav = {
+        NavButton("Images/ui/icons/home.png", "首页", currentPage_ == "home", function()
+            if currentPage_ ~= "home" then
+                pendingPage_ = "home"
+            end
+        end),
         NavButton("Images/ui/icons/room.png", "机房", currentPage_ == "room", function()
             if currentPage_ ~= "room" then
                 pendingPage_ = "room"
@@ -930,9 +1000,6 @@ local function BuildTopBar()
                 pendingPage_ = "rich"
             end
         end),
-        NavButton("Images/ui/icons/rebirth.png", "转生", false, function()
-            UI.Toast.Show("「转生」功能开发中", { type = "info", duration = 1.6 })
-        end),
         NavButton("Images/ui/icons/gear.png", "设置", false, function()
             UI.Toast.Show("「设置」功能开发中", { type = "info", duration = 1.6 })
         end),
@@ -951,6 +1018,12 @@ local function BuildTopBar()
     profitChipLabel_ = profitLabel
     machineCostLabel_ = machineLabel
 
+    ---@type Widget[]
+    local navChildren = { UI.Spacer() }
+    for _, btn in ipairs(nav) do
+        navChildren[#navChildren + 1] = btn
+    end
+
     return UI.Panel {
         height = 72,
         flexDirection = "row",
@@ -968,8 +1041,7 @@ local function BuildTopBar()
             materialChip,
             machineChip,
             profitChip,
-            UI.Spacer(),
-            nav[1], nav[2], nav[3], nav[4], nav[5], nav[6],
+            table.unpack(navChildren),
         },
     }
 end
@@ -3655,10 +3727,454 @@ local function BuildRichFrame()
     }
 end
 
+-- ============================================================================
+-- 首页
+-- ============================================================================
+
+--- 首页货币胶囊（无 + 按钮）
+---@param iconPath string
+---@param label string
+---@param value string
+---@param color number[]|nil
+---@return Panel
+---@return Label
+local function HomeCurrency(iconPath, label, value, color)
+    local valueLabel = Txt(value, compact_ and 15 or 17, color or C.ink, "bold")
+    local panel = UI.Panel {
+        height = compact_ and 40 or 46,
+        flexDirection = "row",
+        alignItems = "center",
+        gap = compact_ and 5 or 7,
+        paddingLeft = 5,
+        paddingRight = compact_ and 12 or 16,
+        borderRadius = 23,
+        backgroundGradient = CREAM_GRAD,
+        borderWidth = 2,
+        borderColor = C.ink,
+        boxShadow = { { x = 0, y = 2, blur = 3, spread = 0, color = { 0, 0, 0, 70 } } },
+        children = {
+            Icon(iconPath, compact_ and 24 or 30),
+            UI.Panel {
+                flexDirection = "column",
+                children = {
+                    Txt(label, 9, C.inkSoft),
+                    valueLabel,
+                },
+            },
+        },
+    }
+    return panel, valueLabel
+end
+
+---@return Panel
+local function BuildHomeTopBar()
+    local logo = UI.Panel {
+        height = compact_ and 46 or 54,
+        flexDirection = "row",
+        alignItems = "center",
+        gap = 7,
+        paddingLeft = 3,
+        paddingRight = compact_ and 10 or 14,
+        borderRadius = 10,
+        backgroundGradient = CREAM_GRAD,
+        borderWidth = 3,
+        borderColor = C.ink,
+        boxShadow = { { x = 0, y = 3, blur = 4, spread = 0, color = { 0, 0, 0, 80 } } },
+        children = {
+            Icon("Images/ui/icons/home.png", compact_ and 38 or 46),
+            Txt("玩具打印工坊", compact_ and 18 or 24, C.ink, "bold"),
+        },
+    }
+
+    local coinChip, coinLabel = HomeCurrency("Images/ui/icons/coin.png", "金币", FormatCoins(coinShown_))
+    local expChip, expLabel = HomeCurrency("Images/ui/icons/exp.png", "经验", FormatNumber(M.exp))
+    local profitChip, profitLabel = HomeCurrency("Images/ui/icons/profit.png", "经营利润",
+        FormatProfit(M.profit), M.profit >= 0 and C.green or C.red)
+    homeCoinLabel_ = coinLabel
+    homeExpLabel_ = expLabel
+    homeProfitLabel_ = profitLabel
+
+    local gearButton = UI.Panel {
+        width = compact_ and 38 or 44,
+        height = compact_ and 38 or 44,
+        borderRadius = 22,
+        justifyContent = "center",
+        alignItems = "center",
+        backgroundGradient = CREAM_GRAD,
+        borderWidth = 2,
+        borderColor = C.ink,
+        boxShadow = { { x = 0, y = 2, blur = 3, spread = 0, color = { 0, 0, 0, 70 } } },
+        onClick = function()
+            UI.Toast.Show("「设置」功能开发中", { type = "info", duration = 1.6 })
+        end,
+        children = { Icon("Images/ui/icons/gear.png", compact_ and 22 or 26) },
+    }
+
+    return UI.Panel {
+        height = compact_ and 64 or 76,
+        flexDirection = "row",
+        alignItems = "center",
+        gap = compact_ and 6 or 10,
+        paddingHorizontal = compact_ and 8 or 14,
+        backgroundColor = C.metal,
+        backgroundImage = "Images/ui/metal_bg.png",
+        backgroundImageOpacity = 0.42,
+        borderBottomWidth = 3,
+        borderBottomColor = C.ink,
+        children = {
+            logo,
+            UI.Spacer(),
+            coinChip,
+            expChip,
+            profitChip,
+            gearButton,
+        },
+    }
+end
+
+---@param labelText string
+---@param valueLabel Label
+---@return Panel
+local function HomeStatRow(labelText, valueLabel)
+    return UI.Panel {
+        height = compact_ and 22 or 26,
+        flexDirection = "row",
+        alignItems = "center",
+        children = {
+            Txt(labelText, compact_ and 11 or 12, C.inkSoft),
+            UI.Spacer(),
+            valueLabel,
+        },
+    }
+end
+
+---@return Panel
+local function BuildHomeOverview()
+    local revenueLabel = Txt(FormatCoins(math.floor(M.todayRevenue)), compact_ and 24 or 32, C.orangeDeep, "bold")
+    local pendingLabel = Txt(tostring(HomePendingCount()), compact_ and 13 or 14, C.ink, "bold")
+    local satisfactionLabel = Txt(string.format("%d%%", HomeSatisfaction()), compact_ and 13 or 14, C.green, "bold")
+    local deliveredLabel = Txt(string.format("%d 件", M.todayDelivered), compact_ and 13 or 14, C.ink, "bold")
+    homeRevenueLabel_ = revenueLabel
+    homePendingLabel_ = pendingLabel
+    homeSatisfactionLabel_ = satisfactionLabel
+    homeDeliveredLabel_ = deliveredLabel
+
+    local venue = Orders.CurrentVenue()
+
+    return UI.Panel {
+        width = compact_ and 186 or 240,
+        flexShrink = 0,
+        flexDirection = "column",
+        padding = compact_ and 10 or 12,
+        gap = compact_ and 6 or 8,
+        borderRadius = 10,
+        backgroundGradient = CREAM_GRAD,
+        backgroundImage = "Images/ui/paper_bg.png",
+        backgroundImageOpacity = 0.5,
+        borderWidth = 3,
+        borderColor = C.ink,
+        boxShadow = { { x = 0, y = 3, blur = 4, spread = 0, color = { 0, 0, 0, 80 } } },
+        children = {
+            UI.Panel {
+                flexDirection = "row",
+                alignItems = "center",
+                gap = 6,
+                children = {
+                    Icon("Images/ui/icons/overview.png", compact_ and 18 or 22),
+                    Txt("经营总览", compact_ and 14 or 16, C.ink, "bold"),
+                },
+            },
+            UI.Panel {
+                flexDirection = "column",
+                alignItems = "center",
+                gap = 1,
+                children = {
+                    Txt("今日收益", compact_ and 10 or 11, C.inkSoft),
+                    revenueLabel,
+                },
+            },
+            UI.Panel { height = 2, backgroundColor = C.track, flexShrink = 0 },
+            HomeStatRow("待完成订单", pendingLabel),
+            HomeStatRow("客户满意度", satisfactionLabel),
+            HomeStatRow("今日交付", deliveredLabel),
+            UI.Spacer(),
+            Txt(string.format("第 %d 天 · %s", M.day, venue.name), compact_ and 9 or 10, C.inkSoft),
+        },
+    }
+end
+
+---@return Panel
+local function BuildHomeHero()
+    return UI.Panel {
+        flexGrow = 1,
+        flexShrink = 1,
+        flexBasis = 0,
+        flexDirection = "column",
+        alignItems = "center",
+        padding = compact_ and 8 or 10,
+        gap = 3,
+        borderRadius = 10,
+        backgroundGradient = CREAM_GRAD,
+        backgroundImage = "Images/ui/paper_bg.png",
+        backgroundImageOpacity = 0.5,
+        borderWidth = 3,
+        borderColor = C.ink,
+        boxShadow = { { x = 0, y = 3, blur = 4, spread = 0, color = { 0, 0, 0, 80 } } },
+        children = {
+            Txt("今日玩具订单", compact_ and 22 or 30, C.ink, "bold"),
+            UI.Panel { width = compact_ and 72 or 110, height = 5, borderRadius = 3, backgroundColor = C.orange },
+            Txt("打印更多塑料玩具，冲刺排行榜", compact_ and 10 or 12, C.inkSoft),
+            UI.Panel {
+                width = "100%",
+                flexGrow = 1,
+                flexShrink = 1,
+                flexBasis = 0,
+                backgroundImage = "Images/ui/home/hero.png",
+                backgroundFit = "contain",
+                pointerEvents = "none",
+            },
+            OrangeButton("去接订单", {
+                height = compact_ and 30 or 36,
+                fontSize = compact_ and 12 or 14,
+                paddingHorizontal = 26,
+                onClick = function()
+                    print("[3D打印] 首页：去接订单")
+                    pendingPage_ = "orders"
+                end,
+            }),
+        },
+    }
+end
+
+---@param rank integer
+---@param nickname string
+---@param coins integer
+---@param isMe boolean
+---@return Panel
+local function HomeRankRow(rank, nickname, coins, isMe)
+    local medal = RANK_COLORS[rank] or C.track
+    return UI.Panel {
+        height = compact_ and 40 or 44,
+        flexDirection = "row",
+        alignItems = "center",
+        gap = 7,
+        paddingHorizontal = 8,
+        borderRadius = 8,
+        backgroundGradient = isMe and ORANGE_GRAD or CREAM_GRAD,
+        borderWidth = 2,
+        borderColor = isMe and C.orangeDeep or C.cardBorder,
+        children = {
+            UI.Panel {
+                width = compact_ and 22 or 24,
+                height = compact_ and 22 or 24,
+                borderRadius = 12,
+                justifyContent = "center",
+                alignItems = "center",
+                backgroundColor = medal,
+                borderWidth = 2,
+                borderColor = isMe and C.orangeDeep or C.ink,
+                children = { Txt(tostring(rank), compact_ and 11 or 12, { 255, 255, 255, 255 }, "bold") },
+            },
+            UI.Panel {
+                flexGrow = 1,
+                flexShrink = 1,
+                flexBasis = 0,
+                overflow = "hidden",
+                children = {
+                    Txt(nickname, compact_ and 11 or 13, isMe and C.orangeDeep or C.ink,
+                        isMe and "bold" or "normal"),
+                },
+            },
+            Icon("Images/ui/icons/coin.png", compact_ and 12 or 14),
+            Txt(FormatCoins(coins), compact_ and 11 or 13, C.inkSoft, "bold"),
+        },
+    }
+end
+
+---@return Panel
+local function BuildHomeRankCard()
+    ---@type Widget[]
+    local rows = {}
+    if homeRank_ == nil then
+        rows[1] = UI.Panel {
+            flexGrow = 1,
+            flexBasis = 0,
+            justifyContent = "center",
+            alignItems = "center",
+            children = { Txt("云端榜单加载中…", compact_ and 11 or 12, C.inkSoft) },
+        }
+    elseif homeRank_ == false then
+        for i = 1, 3 do
+            rows[#rows + 1] = HomeRankRow(i, "虚位以待", 0, false)
+        end
+    else
+        for i = 1, 3 do
+            local entry = homeRank_[i]
+            if entry == nil then
+                rows[#rows + 1] = HomeRankRow(i, "虚位以待", 0, false)
+            else
+                rows[#rows + 1] = HomeRankRow(i, entry.nickname or "玩家", entry.coins, entry.isMe)
+            end
+        end
+    end
+
+    ---@type Widget[]
+    local children = {
+        UI.Panel {
+            flexDirection = "row",
+            alignItems = "center",
+            gap = 6,
+            children = {
+                Icon("Images/ui/icons/trophy.png", compact_ and 18 or 22),
+                Txt("玩具打印排行榜", compact_ and 13 or 15, C.ink, "bold"),
+            },
+        },
+    }
+    for _, row in ipairs(rows) do
+        children[#children + 1] = row
+    end
+    children[#children + 1] = UI.Spacer()
+    children[#children + 1] = OrangeButton("查看完整榜单", {
+        height = compact_ and 30 or 34,
+        fontSize = compact_ and 12 or 13,
+        width = "100%",
+        onClick = function()
+            print("[3D打印] 首页：打开完整榜单")
+            pendingPage_ = "rich"
+        end,
+    })
+
+    return UI.Panel {
+        width = compact_ and 230 or 286,
+        flexShrink = 0,
+        flexDirection = "column",
+        padding = compact_ and 8 or 10,
+        gap = compact_ and 5 or 7,
+        borderRadius = 10,
+        backgroundGradient = CREAM_GRAD,
+        backgroundImage = "Images/ui/paper_bg.png",
+        backgroundImageOpacity = 0.5,
+        borderWidth = 3,
+        borderColor = C.ink,
+        boxShadow = { { x = 0, y = 3, blur = 4, spread = 0, color = { 0, 0, 0, 80 } } },
+        children = children,
+    }
+end
+
+---@param iconPath string
+---@param title string
+---@param hint string
+---@param onClick fun()
+---@return Panel
+local function HomeNavTile(iconPath, title, hint, onClick)
+    return UI.Panel {
+        flexGrow = 1,
+        flexShrink = 1,
+        flexBasis = 0,
+        height = "100%",
+        flexDirection = "row",
+        alignItems = "center",
+        paddingHorizontal = compact_ and 10 or 16,
+        gap = 6,
+        borderRadius = 10,
+        backgroundGradient = CREAM_GRAD,
+        borderWidth = 3,
+        borderColor = C.ink,
+        boxShadow = { { x = 0, y = 3, blur = 4, spread = 0, color = { 0, 0, 0, 80 } } },
+        onClick = onClick,
+        children = {
+            UI.Panel {
+                flexDirection = "column",
+                gap = 1,
+                flexShrink = 1,
+                children = {
+                    Txt(title, compact_ and 14 or 17, C.ink, "bold"),
+                    Txt(hint, compact_ and 9 or 10, C.inkSoft),
+                },
+            },
+            UI.Spacer(),
+            Icon(iconPath, compact_ and 38 or 50),
+        },
+    }
+end
+
+---@return Panel
+local function BuildHomeFrame()
+    local body = UI.Panel {
+        flexGrow = 1,
+        flexBasis = 0,
+        flexDirection = "row",
+        alignItems = "stretch",
+        gap = compact_ and 8 or 10,
+        marginTop = compact_ and 8 or 10,
+        marginHorizontal = compact_ and 8 or 12,
+        children = {
+            BuildHomeOverview(),
+            BuildHomeHero(),
+            BuildHomeRankCard(),
+        },
+    }
+
+    local navRow = UI.Panel {
+        height = compact_ and 78 or 92,
+        flexDirection = "row",
+        gap = compact_ and 8 or 10,
+        marginTop = compact_ and 8 or 10,
+        marginHorizontal = compact_ and 8 or 12,
+        marginBottom = compact_ and 8 or 12,
+        children = {
+            HomeNavTile("Images/ui/icons/nav_printer.png", "打印机房", "管理设备", function()
+                print("[3D打印] 首页导航：打印机房")
+                pendingPage_ = "room"
+            end),
+            HomeNavTile("Images/ui/icons/nav_orders.png", "订单中心", "接单交付", function()
+                print("[3D打印] 首页导航：订单中心")
+                pendingPage_ = "orders"
+            end),
+            HomeNavTile("Images/ui/icons/nav_materials.png", "材料仓库", "补充耗材", function()
+                print("[3D打印] 首页导航：材料仓库")
+                shopTab_ = "materials"
+                pendingPage_ = "shop"
+            end),
+            HomeNavTile("Images/ui/icons/nav_shop.png", "商店升级", "购置升级", function()
+                print("[3D打印] 首页导航：商店升级")
+                shopTab_ = "printers"
+                pendingPage_ = "shop"
+            end),
+        },
+    }
+
+    return UI.Panel {
+        flexGrow = 1,
+        flexBasis = 0,
+        flexDirection = "column",
+        children = { body, navRow },
+    }
+end
+
+--- 拉取首页排行榜前三
+local function RefreshHomeRank()
+    homeRank_ = nil
+    Leaderboard.PushCoins(M.coins)
+    Leaderboard.FetchTop(3, function(entries, reason)
+        if entries == nil then
+            homeRank_ = false
+            print("[3D打印] 首页榜单加载失败: " .. tostring(reason))
+        else
+            homeRank_ = entries
+        end
+        if currentPage_ == "home" then
+            pendingPage_ = "home"
+        end
+    end)
+end
+
 ---@return Panel
 local function BuildRoot()
     local page
-    if currentPage_ == "shop" then
+    if currentPage_ == "home" then
+        page = BuildHomeFrame()
+    elseif currentPage_ == "shop" then
         page = BuildShopFrame()
     elseif currentPage_ == "orders" then
         page = BuildOrdersFrame()
@@ -3670,10 +4186,10 @@ local function BuildRoot()
         page = BuildMainFrame()
     end
 
-    local children = { BuildTopBar(), page }
+    local children = { currentPage_ == "home" and BuildHomeTopBar() or BuildTopBar(), page }
     if currentPage_ == "orders" then
         children[#children + 1] = BuildOrdersBottomBar()
-    elseif currentPage_ ~= "shop" and currentPage_ ~= "gallery" and currentPage_ ~= "rich" then
+    elseif currentPage_ ~= "home" and currentPage_ ~= "shop" and currentPage_ ~= "gallery" and currentPage_ ~= "rich" then
         children[#children + 1] = BuildBottomBar()
     end
 
@@ -3714,6 +4230,7 @@ local function BuildRoot()
 end
 
 ShowPage = function(page)
+    local prevPage = currentPage_
     currentPage_ = page
     roomRefs_ = {}
     orderRefs_ = {}
@@ -3732,6 +4249,10 @@ ShowPage = function(page)
     if page == "rich" then
         RefreshRich()
     end
+    -- 从其他页面回到首页时刷新排行榜前三
+    if page == "home" and prevPage ~= "home" then
+        RefreshHomeRank()
+    end
     -- 重建会销毁旧控件，先清空标签引用，避免操作已释放的对象
     coinChipLabel_ = nil
     powerCostLabel_ = nil
@@ -3740,6 +4261,13 @@ ShowPage = function(page)
     machineCostLabel_ = nil
     venueInfoLabel_ = nil
     venueRentLabel_ = nil
+    homeCoinLabel_ = nil
+    homeExpLabel_ = nil
+    homeProfitLabel_ = nil
+    homeRevenueLabel_ = nil
+    homePendingLabel_ = nil
+    homeSatisfactionLabel_ = nil
+    homeDeliveredLabel_ = nil
     -- 重建页面不会影响 NanoVG 金币层；只需按新布局刷新飞行终点
     if #coinFlies_ > 0 then
         local toX, toY = CoinTargetPoint()

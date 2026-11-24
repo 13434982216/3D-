@@ -15,6 +15,21 @@ M.machineCost = 0.0
 --- 经营利润（金币 = 订单收入 - 电费 - 耗材费 - 维修费 - 购机费）
 ---@type number
 M.profit = 0.0
+--- 经验（每交付一个订单获得，等于订单收益的 1/10）
+---@type number
+M.exp = 0.0
+--- 今日订单收入（每天清零）
+---@type number
+M.todayRevenue = 0.0
+--- 今日交付件数（每天清零）
+---@type integer
+M.todayDelivered = 0
+--- 累计成品件数（用于计算客户满意度）
+---@type integer
+M.goodsDone = 0
+--- 累计损坏件数（用于计算客户满意度）
+---@type integer
+M.damagedDone = 0
 --- 耗材库存（克）：商店购买的耗材入此库，加料时划拨到机器
 ---@type integer
 M.materialStock = 0
