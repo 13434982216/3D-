@@ -3,6 +3,7 @@ local UI = require("urhox-libs/UI")
 local M = require("Game.Machines")
 local Orders = require("Game.Orders")
 local Sfx = require("Game.Sfx")
+local Music = require("Game.Music")
 local Leaderboard = require("Game.Leaderboard")
 local OfficialRank = require("Game.OfficialRank")
 
@@ -19,6 +20,19 @@ local opMachineCode_
 local venueOpen_ = false
 local refreshTimer_ = 0.0
 local fxTime_ = 0.0
+
+--- 音量设置（0~1），会持久化到本地 settings.json
+local musicVolume_ = 0.5
+local sfxVolume_ = 0.75
+local settingsOpen_ = false
+
+---@type fun()
+local OpenSettings
+
+--- 全局指针点击音效的按下状态
+local pointerDownX_ = 0.0
+local pointerDownY_ = 0.0
+local pointerDownOnClickable_ = false
 
 -- 富豪榜：nil = 加载中，false = 加载失败（reason 在 richError_）
 ---@type RichEntry[]|nil|false
@@ -1000,8 +1014,8 @@ local function BuildTopBar()
                 pendingPage_ = "rich"
             end
         end),
-        NavButton("Images/ui/icons/gear.png", "设置", false, function()
-            UI.Toast.Show("「设置」功能开发中", { type = "info", duration = 1.6 })
+        NavButton("Images/ui/icons/gear.png", "设置", settingsOpen_, function()
+            OpenSettings()
         end),
     }
 
@@ -2349,6 +2363,7 @@ local function DeliverAllOrders()
         if coins > 0 then
             SpawnCoinFly(640, 300, math.max(4, math.min(10, count * 3)))
             Sfx.CoinPickup(0.5)
+            Sfx.Success()
             RefreshTopBar()
         end
         UI.Toast.Show(string.format("已交付 %d 张订单，+%d 金币", count, coins),
@@ -2616,6 +2631,7 @@ OnOrderAction = function(order)
         if settled and gained > 0 then
             SpawnCoinFly(640, 300, math.max(3, math.min(8, math.floor(gained / 90) + 3)))
             Sfx.CoinPickup(0.5)
+            Sfx.Success()
             RefreshTopBar()
         elseif not settled then
             Sfx.Bad()
@@ -3805,7 +3821,7 @@ local function BuildHomeTopBar()
         borderColor = C.ink,
         boxShadow = { { x = 0, y = 2, blur = 3, spread = 0, color = { 0, 0, 0, 70 } } },
         onClick = function()
-            UI.Toast.Show("「设置」功能开发中", { type = "info", duration = 1.6 })
+            OpenSettings()
         end,
         children = { Icon("Images/ui/icons/gear.png", compact_ and 22 or 26) },
     }
@@ -4192,6 +4208,270 @@ local function RefreshHomeRank()
     end)
 end
 
+-- ============================================================================
+-- 设置（音量）
+-- ============================================================================
+
+local function LoadSettings()
+    if not fileSystem:FileExists("settings.json") then
+        return
+    end
+    local file = File("settings.json", FILE_READ)
+    if file == nil or not file:IsOpen() then
+        return
+    end
+    local text = file:ReadString()
+    file:Close()
+    local ok, data = pcall(cjson.decode, text)
+    if ok and type(data) == "table" then
+        musicVolume_ = math.max(0, math.min(1, tonumber(data.music) or musicVolume_))
+        sfxVolume_ = math.max(0, math.min(1, tonumber(data.sfx) or sfxVolume_))
+    end
+end
+
+local function SaveSettings()
+    local file = File("settings.json", FILE_WRITE)
+    if file == nil or not file:IsOpen() then
+        return
+    end
+    file:WriteString(cjson.encode({ music = musicVolume_, sfx = sfxVolume_ }))
+    file:Close()
+end
+
+local function ApplyVolumes()
+    Music.SetVolume(musicVolume_)
+    Sfx.SetVolume(sfxVolume_)
+end
+
+local function CloseSettings()
+    if not settingsOpen_ then
+        return
+    end
+    settingsOpen_ = false
+    SaveSettings()
+    Sfx.Close()
+    pendingPage_ = currentPage_
+end
+
+OpenSettings = function()
+    if settingsOpen_ then
+        return
+    end
+    settingsOpen_ = true
+    Sfx.Open()
+    pendingPage_ = currentPage_
+end
+
+---@param title string
+---@param value number 0~1
+---@param onChange fun(v: number)
+---@param onCommit fun(v: number)
+---@return Panel
+local function SettingsVolumeRow(title, value, onChange, onCommit)
+    local pctLabel = Txt(string.format("%d%%", math.floor(value * 100 + 0.5)), 13, C.ink, "bold")
+    ---@type table
+    local sliderProps = {
+        width = "100%",
+        height = 30,
+        min = 0,
+        max = 100,
+        step = 1,
+        value = math.floor(value * 100 + 0.5),
+        trackHeight = 8,
+        thumbSize = 20,
+        trackBgColor = C.track,
+        trackFillColor = C.orangeDeep,
+        thumbColor = { 250, 243, 226, 255 },
+        thumbBorderColor = C.ink,
+        thumbBorderWidth = 2,
+        onChange = function(_, v)
+            pctLabel:SetText(string.format("%d%%", math.floor(v + 0.5)))
+            onChange(v / 100)
+        end,
+        onChangeEnd = function(_, v)
+            onCommit(v / 100)
+        end,
+    }
+    return UI.Panel {
+        width = "100%",
+        flexDirection = "column",
+        gap = 6,
+        children = {
+            UI.Panel {
+                flexDirection = "row",
+                alignItems = "center",
+                children = {
+                    Txt(title, 14, C.ink, "bold"),
+                    UI.Spacer(),
+                    pctLabel,
+                },
+            },
+            UI.Slider(sliderProps),
+        },
+    }
+end
+
+---@return Panel
+local function BuildSettingsOverlay()
+    local dialog = UI.Panel {
+        width = compact_ and 360 or 440,
+        flexDirection = "column",
+        gap = 12,
+        padding = compact_ and 14 or 18,
+        borderRadius = 12,
+        backgroundGradient = CREAM_GRAD,
+        borderWidth = 3,
+        borderColor = C.ink,
+        boxShadow = { { x = 0, y = 6, blur = 10, spread = 0, color = { 0, 0, 0, 110 } } },
+        children = {
+            UI.Panel {
+                flexDirection = "row",
+                alignItems = "center",
+                gap = 8,
+                children = {
+                    Icon("Images/ui/icons/gear.png", 26),
+                    Txt("设置", compact_ and 18 or 20, C.ink, "bold"),
+                    UI.Spacer(),
+                    CreamButton("关闭", {
+                        height = 30,
+                        fontSize = 12,
+                        paddingHorizontal = 16,
+                        onClick = function()
+                            CloseSettings()
+                        end,
+                    }),
+                },
+            },
+            UI.Panel { height = 2, backgroundColor = C.track },
+            SettingsVolumeRow("背景音乐", musicVolume_, function(v)
+                musicVolume_ = v
+                Music.SetVolume(v)
+            end, function(v)
+                musicVolume_ = v
+                SaveSettings()
+                Sfx.Toggle()
+            end),
+            SettingsVolumeRow("交互音效", sfxVolume_, function(v)
+                sfxVolume_ = v
+                Sfx.SetVolume(v)
+            end, function(v)
+                sfxVolume_ = v
+                SaveSettings()
+                Sfx.Toggle()
+            end),
+            Txt("音量设置会自动保存", 10, C.inkSoft),
+            OrangeButton("完成", {
+                width = 140,
+                height = 38,
+                fontSize = 14,
+                alignSelf = "flex-end",
+                onClick = function()
+                    CloseSettings()
+                end,
+            }),
+        },
+    }
+
+    return UI.Panel {
+        position = "absolute",
+        left = 0,
+        top = 0,
+        width = "100%",
+        height = "100%",
+        justifyContent = "center",
+        alignItems = "center",
+        backgroundColor = { 0, 0, 0, 150 },
+        zIndex = 200,
+        onClick = function()
+            CloseSettings()
+        end,
+        children = { dialog },
+    }
+end
+
+-- ============================================================================
+-- 全局按钮点击音效
+-- ============================================================================
+
+--- 命中控件或其父级是否绑定了 onClick，避免点空白/文字也响
+---@param widget Widget|nil
+---@return boolean
+local function WidgetHasOnClick(widget)
+    local node = widget
+    for _ = 1, 10 do
+        if node == nil then
+            return false
+        end
+        if node.props ~= nil and node.props.onClick ~= nil then
+            return true
+        end
+        node = node.parent
+    end
+    return false
+end
+
+local lastClickFrame_ = -1
+
+---@param x number
+---@param y number
+local function PointerDown(x, y)
+    pointerDownX_, pointerDownY_ = x, y
+    local scale = UI.GetScale()
+    local widget = UI.FindWidgetAt(x / scale, y / scale)
+    pointerDownOnClickable_ = WidgetHasOnClick(widget)
+    Music.EnsurePlaying()
+end
+
+---@param x number
+---@param y number
+local function PointerUp(x, y)
+    if not pointerDownOnClickable_ then
+        return
+    end
+    pointerDownOnClickable_ = false
+    local dx, dy = x - pointerDownX_, y - pointerDownY_
+    -- 拖动（滚动、拉滑块）不触发点击音
+    if dx * dx + dy * dy > 196 then
+        return
+    end
+    local frame = time.frameNumber
+    if frame == lastClickFrame_ then
+        return
+    end
+    lastClickFrame_ = frame
+    Sfx.Click()
+end
+
+---@param eventType string
+---@param eventData MouseButtonDownEventData
+function HandleUiMouseDown(eventType, eventData)
+    if eventData:GetInt("Button") ~= MOUSEB_LEFT then
+        return
+    end
+    PointerDown(eventData:GetInt("X"), eventData:GetInt("Y"))
+end
+
+---@param eventType string
+---@param eventData MouseButtonUpEventData
+function HandleUiMouseUp(eventType, eventData)
+    if eventData:GetInt("Button") ~= MOUSEB_LEFT then
+        return
+    end
+    PointerUp(eventData:GetInt("X"), eventData:GetInt("Y"))
+end
+
+---@param eventType string
+---@param eventData TouchBeginEventData
+function HandleUiTouchDown(eventType, eventData)
+    PointerDown(eventData:GetInt("X"), eventData:GetInt("Y"))
+end
+
+---@param eventType string
+---@param eventData TouchEndEventData
+function HandleUiTouchUp(eventType, eventData)
+    PointerUp(eventData:GetInt("X"), eventData:GetInt("Y"))
+end
+
 ---@return Panel
 local function BuildRoot()
     local page
@@ -4236,6 +4516,10 @@ local function BuildRoot()
 
     if venueOpen_ and currentPage_ == "room" then
         children[#children + 1] = BuildVenueOverlay()
+    end
+
+    if settingsOpen_ then
+        children[#children + 1] = BuildSettingsOverlay()
     end
 
     local root = UI.Panel {
@@ -4309,6 +4593,7 @@ local RoomUI = {}
 
 function RoomUI.Setup()
     compact_ = UI.GetWidth() < 1200
+    LoadSettings()
     Orders.Init()
     coinShown_ = math.floor(M.coins)
     coinTarget_ = coinShown_
@@ -4316,6 +4601,12 @@ function RoomUI.Setup()
     UI.Toast.GetGlobal({ position = "top", maxToasts = 3 })
     EnsureCoinRenderer()
     Sfx.Warmup()
+    Music.Init()
+    ApplyVolumes()
+    SubscribeToEvent("MouseButtonDown", "HandleUiMouseDown")
+    SubscribeToEvent("MouseButtonUp", "HandleUiMouseUp")
+    SubscribeToEvent("TouchBegin", "HandleUiTouchDown")
+    SubscribeToEvent("TouchEnd", "HandleUiTouchUp")
     print("[3D打印] 界面已加载")
 end
 

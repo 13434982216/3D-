@@ -28,6 +28,21 @@ local CLIP_PATHS = {
     print_bad = {
         "Sounds/print_bad.wav",
     },
+    ui_click = {
+        "Sounds/ui_click.mp3",
+    },
+    ui_open = {
+        "Sounds/ui_open.mp3",
+    },
+    ui_close = {
+        "Sounds/ui_close.mp3",
+    },
+    ui_success = {
+        "Sounds/ui_success.mp3",
+    },
+    ui_toggle = {
+        "Sounds/ui_toggle.mp3",
+    },
 }
 
 local function Init()
@@ -102,6 +117,38 @@ end
 --- 打印损坏 / 操作失败的提示音
 function Sfx.Bad()
     Play("print_bad", 0.5, 0.95 + math.random() * 0.1)
+end
+
+--- 按钮点击：柔和的木质点击声
+function Sfx.Click()
+    Play("ui_click", 0.45, 0.97 + math.random() * 0.05)
+end
+
+--- 弹窗/面板打开
+function Sfx.Open()
+    Play("ui_open", 0.5, 0.98 + math.random() * 0.04)
+end
+
+--- 弹窗/面板关闭
+function Sfx.Close()
+    Play("ui_close", 0.45, 0.98 + math.random() * 0.04)
+end
+
+--- 订单完成等正反馈提示音
+function Sfx.Success()
+    Play("ui_success", 0.5, 0.99 + math.random() * 0.03)
+end
+
+--- 滑块/开关的轻微刻度声
+function Sfx.Toggle()
+    Play("ui_toggle", 0.4, 0.97 + math.random() * 0.06)
+end
+
+---@param v number 0~1 全局音效音量
+function Sfx.SetVolume(v)
+    pcall(function()
+        audio:SetMasterGain(SOUND_EFFECT, math.max(0, math.min(1, v)))
+    end)
 end
 
 --- 提前加载音效资源
