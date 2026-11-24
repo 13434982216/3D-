@@ -3976,9 +3976,7 @@ end
 local function HomeRankRow(rank, nickname, coins, isMe)
     local medal = RANK_COLORS[rank] or C.track
     return UI.Panel {
-        minHeight = compact_ and 40 or 44,
-        flexGrow = 1,
-        flexBasis = 0,
+        height = compact_ and 44 or 56,
         flexShrink = 0,
         flexDirection = "row",
         alignItems = "center",
@@ -4054,11 +4052,11 @@ local function BuildHomeRankCard()
                 Txt("玩具打印排行榜", compact_ and 13 or 15, C.ink, "bold"),
             },
         },
+        UI.Spacer(),
     }
     for _, row in ipairs(rows) do
         children[#children + 1] = row
     end
-    children[#children + 1] = UI.Spacer()
     children[#children + 1] = OrangeButton("查看完整榜单", {
         height = compact_ and 30 or 34,
         fontSize = compact_ and 12 or 13,
@@ -4068,6 +4066,7 @@ local function BuildHomeRankCard()
             pendingPage_ = "rich"
         end,
     })
+    children[#children + 1] = UI.Spacer()
 
     return UI.Panel {
         width = compact_ and 230 or 286,
