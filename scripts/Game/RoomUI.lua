@@ -7,7 +7,7 @@ local Leaderboard = require("Game.Leaderboard")
 local OfficialRank = require("Game.OfficialRank")
 
 local compact_ = false
-local currentPage_ = "orders"
+local currentPage_ = "gallery"
 local pendingPage_ = nil
 local shopTab_ = "printers"
 local orderFilter_ = "all"
