@@ -24,7 +24,7 @@ local fxTime_ = 0.0
 --- 音量设置（0~1），会持久化到本地 settings.json
 local musicVolume_ = 0.5
 local sfxVolume_ = 0.75
-local settingsOpen_ = true
+local settingsOpen_ = false
 
 ---@type fun()
 local OpenSettings
@@ -4360,15 +4360,20 @@ local function BuildSettingsOverlay()
                 Sfx.Toggle()
             end),
             Txt("音量设置会自动保存", 10, C.inkSoft),
-            OrangeButton("完成", {
-                width = 140,
-                height = 38,
-                fontSize = 14,
-                alignSelf = "flex-end",
-                onClick = function()
-                    CloseSettings()
-                end,
-            }),
+            UI.Panel {
+                flexDirection = "row",
+                justifyContent = "flex-end",
+                children = {
+                    OrangeButton("完成", {
+                        width = 140,
+                        height = 38,
+                        fontSize = 14,
+                        onClick = function()
+                            CloseSettings()
+                        end,
+                    }),
+                },
+            },
         },
     }
 
@@ -4420,6 +4425,8 @@ local function PointerDown(x, y)
     local widget = UI.FindWidgetAt(x / scale, y / scale)
     pointerDownOnClickable_ = WidgetHasOnClick(widget)
     Music.EnsurePlaying()
+    -- 音频设备可能在启动稍后才就绪，用户首次交互时重新应用音量
+    ApplyVolumes()
 end
 
 ---@param x number
