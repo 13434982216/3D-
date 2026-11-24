@@ -7,7 +7,7 @@ local Leaderboard = require("Game.Leaderboard")
 local OfficialRank = require("Game.OfficialRank")
 
 local compact_ = false
-local currentPage_ = "room"
+local currentPage_ = "home"
 local pendingPage_ = nil
 local shopTab_ = "printers"
 local orderFilter_ = "all"
@@ -3976,7 +3976,10 @@ end
 local function HomeRankRow(rank, nickname, coins, isMe)
     local medal = RANK_COLORS[rank] or C.track
     return UI.Panel {
-        height = compact_ and 40 or 44,
+        minHeight = compact_ and 40 or 44,
+        flexGrow = 1,
+        flexBasis = 0,
+        flexShrink = 0,
         flexDirection = "row",
         alignItems = "center",
         gap = 7,
