@@ -3918,7 +3918,7 @@ local function BuildHomeOverview()
                 gap = 1,
                 children = {
                     UI.Label {
-                        text = "今日收益",
+                        text = "累计收益",
                         fontSize = compact_ and 10 or 11,
                         fontColor = C.inkSoft --[[@as RGBAColor]],
                         lineHeight = 1.2,
@@ -3933,7 +3933,7 @@ local function BuildHomeOverview()
             UI.Panel { height = 2, backgroundColor = C.track, flexShrink = 0 },
             HomeStatRow("待完成订单", pendingLabel),
             HomeStatRow("客户满意度", satisfactionLabel),
-            HomeStatRow("今日交付", deliveredLabel),
+            HomeStatRow("累计交付", deliveredLabel),
             HomeStatRow("打印机", Txt(string.format("%d 台", #M.machines), compact_ and 13 or 14, C.ink, "bold")),
             HomeStatRow("耗材库存", Txt(FormatGrams(M.materialStock), compact_ and 13 or 14, C.ink, "bold")),
             UI.Spacer(),

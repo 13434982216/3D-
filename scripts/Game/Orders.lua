@@ -450,8 +450,6 @@ function UpdateDay(dt)
     end
     M.dayTimer = M.dayTimer - M.daySeconds
     M.day = M.day + 1
-    M.todayRevenue = 0.0
-    M.todayDelivered = 0
 
     local rent = Orders.CurrentVenue().rent
     if M.coins >= rent then
