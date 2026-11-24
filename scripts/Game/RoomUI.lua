@@ -2508,7 +2508,7 @@ end
 local function BuildGalleryFrame()
     local producedModels = 0
     local totalDelivered = 0
-    for _, order in ipairs(M.orders) do
+    for _, order in ipairs(M.orderCatalog) do
         local n = M.delivered[order.product] or 0
         if n > 0 then
             producedModels = producedModels + 1
@@ -2544,7 +2544,7 @@ local function BuildGalleryFrame()
         borderWidth = 2,
         borderColor = ORDER_BORDER,
         children = {
-            Txt(string.format("收录 %d / %d 型号", producedModels, #M.orders), 12, C.ink, "bold"),
+            Txt(string.format("收录 %d / %d 型号", producedModels, #M.orderCatalog), 12, C.ink, "bold"),
             UI.Panel {
                 width = 2,
                 height = 18,
@@ -2561,7 +2561,7 @@ local function BuildGalleryFrame()
     local rowsWidth = viewportWidth - 56
 
     local cards = {}
-    for _, order in ipairs(M.orders) do
+    for _, order in ipairs(M.orderCatalog) do
         cards[#cards + 1] = BuildGalleryCard(order)
     end
 
@@ -4324,6 +4324,13 @@ function RoomUI.Update(dt)
     fxTime_ = fxTime_ + dt
     local completed = Orders.Update(dt)
     local needRebuild = false
+
+    local newOrders = Orders.TakeNewOrderNotice()
+    if newOrders > 0 then
+        UI.Toast.Show(string.format("新订单上架 +%d，继续加油", newOrders),
+            { type = "success", duration = 1.8 })
+        needRebuild = true
+    end
 
     local dayEvent = Orders.TakeDayEvent()
     if dayEvent ~= nil then

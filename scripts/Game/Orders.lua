@@ -16,6 +16,22 @@ local dayEvent_ = nil
 ---@type fun(dt: number)
 local UpdateDay
 
+--- 开局订单数
+local INITIAL_ORDERS = 3
+--- 每成功交付一单奖励的新订单数
+local ORDERS_PER_DELIVERY = 2
+--- 模板库循环一轮后的价格上浮比例
+local CYCLE_PRICE_STEP = 0.15
+
+---@type integer 下一个要取的模板下标
+local catalogIndex_ = 1
+---@type integer 模板库已循环的轮数
+local cycle_ = 0
+---@type integer 新订单编号
+local nextOrderNum_ = 1001
+---@type integer 待提示的新订单数
+local newOrderNotice_ = 0
+
 local function BuildIndex()
     byId_ = {}
     byCode_ = {}
@@ -38,8 +54,74 @@ local function ResetMachine(machine)
     machine.orderId = nil
 end
 
+--- 从模板库生成一张新订单并加入当前订单列表
+---@param priceMul number|nil 额外价格倍率（广告高价单可用）
+---@return Order|nil
+local function SpawnOrder(priceMul)
+    if #M.orderCatalog == 0 then
+        return nil
+    end
+    if catalogIndex_ > #M.orderCatalog then
+        catalogIndex_ = 1
+        cycle_ = cycle_ + 1
+    end
+    local tpl = M.orderCatalog[catalogIndex_]
+    catalogIndex_ = catalogIndex_ + 1
+    if tpl == nil then
+        return nil
+    end
+    local mul = (1 + CYCLE_PRICE_STEP * cycle_) * (priceMul or 1.0)
+    local unitPrice = math.max(1, math.floor(tpl.unitPrice * mul + 0.5))
+    ---@type Order
+    local order = {
+        id = string.format("A-%04d", nextOrderNum_),
+        client = tpl.client,
+        product = tpl.product,
+        icon = tpl.icon,
+        quantity = tpl.quantity,
+        unitPrice = unitPrice,
+        material = tpl.material,
+        materialImage = tpl.materialImage,
+        grams = tpl.grams,
+        price = unitPrice * tpl.quantity,
+        seconds = tpl.seconds,
+        status = "待制作",
+        machineCode = nil,
+        progress = 0.0,
+        goodCount = 0,
+        damagedCount = 0,
+        desc = tpl.desc,
+    }
+    nextOrderNum_ = nextOrderNum_ + 1
+    M.orders[#M.orders + 1] = order
+    byId_[order.id] = order
+    return order
+end
+
+--- 追加新订单，并累计「新订单上架」提示
+---@param count integer
+---@param priceMul number|nil
+---@return integer spawned
+function Orders.GrantOrders(count, priceMul)
+    local spawned = 0
+    for _ = 1, count do
+        if SpawnOrder(priceMul) ~= nil then
+            spawned = spawned + 1
+        end
+    end
+    newOrderNotice_ = newOrderNotice_ + spawned
+    return spawned
+end
+
+--- 取走「新订单上架」提示数量（供 UI toast）
+---@return integer
+function Orders.TakeNewOrderNotice()
+    local n = newOrderNotice_
+    newOrderNotice_ = 0
+    return n
+end
+
 function Orders.Init()
-    BuildIndex()
     nextCode_ = 1
     powerDebt_ = 0.0
     dayEvent_ = nil
@@ -56,14 +138,17 @@ function Orders.Init()
             nextCode_ = math.floor(n) + 1
         end
     end
-    for _, order in ipairs(M.orders) do
-        order.status = "待制作"
-        order.machineCode = nil
-        order.progress = 0.0
-        order.goodCount = 0
-        order.damagedCount = 0
-    end
     M.delivered = {}
+    byId_ = {}
+    M.orders = {}
+    catalogIndex_ = 1
+    cycle_ = 0
+    nextOrderNum_ = 1001
+    newOrderNotice_ = 0
+    for _ = 1, INITIAL_ORDERS do
+        SpawnOrder(nil)
+    end
+    BuildIndex()
     for _, machine in ipairs(M.machines) do
         ResetMachine(machine)
     end
@@ -445,6 +530,8 @@ function Orders.Collect(machine)
         order.machineCode = nil
         order.progress = 1.0
         ResetMachine(machine)
+        -- 成功交付一单，奖励两单新订单
+        Orders.GrantOrders(ORDERS_PER_DELIVERY)
         return reward, string.format("交付订单 %s，+%d 金币", order.id, reward)
     end
 

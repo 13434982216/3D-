@@ -127,8 +127,9 @@ M.machines = {}
 ---@field damagedCount integer 本批损坏件数（需补打）
 ---@field desc string 图鉴简介
 
+--- 订单模板库：图鉴按此展示全部型号，订单从模板生成
 ---@type Order[]
-M.orders = {
+M.orderCatalog = {
     { id = "A-1001", client = "潮玩集合店", product = "关节章鱼", icon = "Images/ui/products/octopus.png",
       quantity = 12, unitPrice = 28, material = "PETG 蓝色", materialImage = "Images/ui/materials/petg.png",
       grams = 420, price = 336, seconds = 34, status = "待制作", machineCode = nil, progress = 0.0,
@@ -178,6 +179,10 @@ M.orders = {
       grams = 400, price = 528, seconds = 44, status = "待制作", machineCode = nil, progress = 0.0,
       goodCount = 0, damagedCount = 0, desc = "戴皇冠的呆萌鸭，整活爆款" },
 }
+
+--- 当前订单列表：开局 3 单，每成功交付 1 单奖励 2 单
+---@type Order[]
+M.orders = {}
 
 ---@class ShopPrinter
 ---@field name string
