@@ -32,7 +32,7 @@ local richSelfRank_
 local richTotal_
 --- 首页排行榜前三：nil = 加载中，false = 加载失败
 ---@type RankEntry[]|nil|false
-local homeRank_
+local homeRank_ = { { rank = 1, nickname = "玩具大亨", coins = 1280000, isMe = false }, { rank = 2, nickname = "模型大师", coins = 960000, isMe = false }, { rank = 3, nickname = "新手小工坊", coins = 720000, isMe = true } }
 --- 金币云同步节流
 local cloudSyncTimer_ = 0.0
 ---@type integer 上次发起同步时的金币值
