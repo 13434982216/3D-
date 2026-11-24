@@ -1,20 +1,20 @@
 {
   "$schema": "../schemas/project.schema.json",
-  "project_id": "m_ngzj",
+  "project_id": "m_g9cj",
   "author": {
-    "id": "548607299"
+    "id": "1052919190"
   },
   "entry": "main.lua",
-  "version": "1.0.1",
+  "version": "1.0.18",
   "taptap_publish": {
     "title": "大学生失业1万块开3D打印工作室",
     "category": "simulation",
     "screen_orientation": "landscape",
     "collection_type": "sce",
     "app_platforms": "1,2",
-    "app_id": 1077667,
-    "developer_id": 259984,
-    "miniapp_id": "tapmcgli5eb5iewlqj"
+    "app_id": 1037373,
+    "developer_id": 418172,
+    "miniapp_id": "tapmcf6qc0abyflzi1"
   },
   "assets": {},
   "metadata": {
