@@ -67,7 +67,6 @@ CLAUDE.md
 /.codex
 /.opencode
 **/.pack-write-*
-/.cache/
 
 # >>> TapTap Maker AI dev kit (local only) >>>
 .DS_Store
@@ -107,3 +106,4 @@ templates/
 tools/
 urhox-libs/
 # <<< TapTap Maker AI dev kit (local only) <<<
+/.cache/
