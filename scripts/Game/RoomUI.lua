@@ -8,7 +8,7 @@ local Leaderboard = require("Game.Leaderboard")
 local OfficialRank = require("Game.OfficialRank")
 
 local compact_ = false
-local currentPage_ = "home"
+local currentPage_ = "rich"
 local pendingPage_ = nil
 local shopTab_ = "printers"
 local orderFilter_ = "all"
@@ -4560,8 +4560,9 @@ ShowPage = function(page)
         opMachineCode_ = nil
         venueOpen_ = false
     end
-    -- 进入富豪榜页时先上传最新金币，再拉取榜单与我的名次
-    if page == "rich" then
+    -- 进入富豪榜页时先上传最新金币，再拉取榜单与我的名次；
+    -- 只在从其他页面进入时刷新，避免回调重建页面时反复拉取导致死循环
+    if page == "rich" and prevPage ~= "rich" then
         RefreshRich()
     end
     -- 从其他页面回到首页时刷新排行榜前三
