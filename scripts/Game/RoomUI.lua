@@ -24,7 +24,7 @@ local fxTime_ = 0.0
 --- 音量设置（0~1），会持久化到本地 settings.json
 local musicVolume_ = 0.5
 local sfxVolume_ = 0.75
-local settingsOpen_ = false
+local settingsOpen_ = true
 
 ---@type fun()
 local OpenSettings
