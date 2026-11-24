@@ -3850,7 +3850,17 @@ end
 
 ---@return Panel
 local function BuildHomeOverview()
-    local revenueLabel = Txt(FormatCoins(math.floor(M.todayRevenue)), compact_ and 24 or 32, C.orangeDeep, "bold")
+    local revenueLabel = UI.Label {
+        text = FormatCoins(math.floor(M.todayRevenue)),
+        fontSize = compact_ and 24 or 32,
+        fontColor = C.orangeDeep --[[@as RGBAColor]],
+        fontWeight = "bold",
+        lineHeight = 1.2,
+        maxLines = 1,
+        whiteSpace = "nowrap",
+        width = "100%",
+        textAlign = "center",
+    }
     local pendingLabel = Txt(tostring(HomePendingCount()), compact_ and 13 or 14, C.ink, "bold")
     local satisfactionLabel = Txt(string.format("%d%%", HomeSatisfaction()), compact_ and 13 or 14, C.green, "bold")
     local deliveredLabel = Txt(string.format("%d 件", M.todayDelivered), compact_ and 13 or 14, C.ink, "bold")
@@ -3885,11 +3895,21 @@ local function BuildHomeOverview()
                 },
             },
             UI.Panel {
+                width = "100%",
                 flexDirection = "column",
                 alignItems = "center",
                 gap = 1,
                 children = {
-                    Txt("今日收益", compact_ and 10 or 11, C.inkSoft),
+                    UI.Label {
+                        text = "今日收益",
+                        fontSize = compact_ and 10 or 11,
+                        fontColor = C.inkSoft --[[@as RGBAColor]],
+                        lineHeight = 1.2,
+                        maxLines = 1,
+                        whiteSpace = "nowrap",
+                        width = "100%",
+                        textAlign = "center",
+                    },
                     revenueLabel,
                 },
             },
@@ -3897,6 +3917,8 @@ local function BuildHomeOverview()
             HomeStatRow("待完成订单", pendingLabel),
             HomeStatRow("客户满意度", satisfactionLabel),
             HomeStatRow("今日交付", deliveredLabel),
+            HomeStatRow("打印机", Txt(string.format("%d 台", #M.machines), compact_ and 13 or 14, C.ink, "bold")),
+            HomeStatRow("耗材库存", Txt(FormatGrams(M.materialStock), compact_ and 13 or 14, C.ink, "bold")),
             UI.Spacer(),
             Txt(string.format("第 %d 天 · %s", M.day, venue.name), compact_ and 9 or 10, C.inkSoft),
         },
