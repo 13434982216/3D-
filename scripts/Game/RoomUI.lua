@@ -3867,6 +3867,7 @@ end
 ---@return Panel
 local function BuildHomeOverview()
     local revenueLabel = UI.Label {
+        id = "homeRevenue",
         text = FormatCoins(math.floor(M.todayRevenue)),
         fontSize = compact_ and 24 or 32,
         fontColor = C.orangeDeep --[[@as RGBAColor]],
